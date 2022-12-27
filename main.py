@@ -101,7 +101,7 @@ def alert():
 
 
 def isValidLink(link):
-    response = requests.get(link, headers=HEADERS)
+    response = requests.get(link, headers=HEADERS, allow_redirects=True)
     # create the soup object
     soup = BeautifulSoup(response.content, 'lxml')
     soup.encode('utf-8')
@@ -116,12 +116,10 @@ def get_price(link):
     '''
         This function returns title and price of any given product
     '''
-    # print(link)
-    response = requests.get(link, headers=HEADERS)
+    response = requests.get(link, headers=HEADERS, allow_redirects=True)
     # create the soup object
     soup = BeautifulSoup(response.content, 'lxml')
     soup.encode('utf-8')
-    # print(soup)
     title = soup.find("span", {"id": "productTitle"}).get_text().strip()
     price = soup.find_all("span", {"class": "a-price-whole"})[0].get_text().replace(
         ',', '').replace('₹', '').replace(' ', '').replace('.', '').strip()
@@ -142,20 +140,23 @@ def onMsgReceived(update: Update, context: CallbackContext):
         chat_id = update.message.chat_id
         message_id = update.message.message_id
         msg_id = context.bot.send_message(
-            chat_id, "Please wait while I checkout this product's price 🙂").message_id
-
-        if re.search(amazonRegex, msg):
-            if isValidLink(msg) == False:
-                reply = "It seems that you haven't sent a valid product link. Please try again with a valid link😅."
-                context.bot.edit_message_text(
-                    chat_id=update.message.chat_id,
-                    text=reply,
-                    message_id=msg_id,
-                )
-                return
-
-            current_price, title, available = get_price(msg)
-
+            chat_id, "Looking for a valid Amazon link in your message 🔍").message_id
+        if re.search("(?P<url>https?://[^\s]+)", msg) is None:
+            reply = "It seems that you haven't sent a valid product link. Please try again with a valid link😅."
+            context.bot.edit_message_text(
+                chat_id=update.message.chat_id,
+                text=reply,
+                message_id=msg_id,
+            )
+            return
+        link = re.search("(?P<url>https?://[^\s]+)", msg).group("url")
+        if isValidLink(link):
+            current_price, title, available = get_price(link)
+            context.bot.edit_message_text(
+                chat_id=update.message.chat_id,
+                text="Valid link found👍.Checking product's price😁",
+                message_id=msg_id,
+            )
             if not available:
                 reply = f'Hi {user_name}! {title} is currently unavailable😓. Try again later.'
                 context.bot.edit_message_text(
@@ -164,7 +165,7 @@ def onMsgReceived(update: Update, context: CallbackContext):
                     message_id=msg_id,
                 )
                 return
-            if check_in_db(chat_id, msg):
+            if check_in_db(chat_id, link):
                 reply = f'Hi {user_name}! You are already tracking {title} 😅.'
                 context.bot.edit_message_text(
                     chat_id=update.message.chat_id,
@@ -173,7 +174,7 @@ def onMsgReceived(update: Update, context: CallbackContext):
                 )
                 return
 
-            insertInDb(user_name=user_name, chat_id=chat_id, product_link=msg, product_name=title,
+            insertInDb(user_name=user_name, chat_id=chat_id, product_link=link, product_name=title,
                        product_price=current_price, lowest_price=current_price, message_id=message_id, availability=available)
             reply = f'Hi {user_name}! {title} is currently available at ₹ {current_price}. I will send you a message when the price drops😉.'
             context.bot.edit_message_text(
