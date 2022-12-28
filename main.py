@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, MetaData, delete
 from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import utc
 import os
+import logging
 bot_token = os.environ['API_KEY']
 engine = create_engine("sqlite:///price_tracker.db")
 metadata_obj = MetaData(bind=engine)
@@ -19,7 +20,10 @@ flipKartRegex = "^https://www.flipkart.com"
 HEADERS = ({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
            'Accept-Language': 'en-US, en;q=0.5'})
 bot = Bot(token=bot_token)
-
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 def check_in_db(chat_id, product_link):
     with Session(engine) as session:
