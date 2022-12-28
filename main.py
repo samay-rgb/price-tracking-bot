@@ -11,10 +11,11 @@ from pytz import utc
 import os
 import logging
 bot_token = os.environ['API_KEY']
-engine = create_engine("sqlite:///price_tracker.db")
+engine = create_engine(
+    "postgresql://postgres:ahRbK9ywMU88xuidBLlh@containers-us-west-42.railway.app:5809/railway")
 metadata_obj = MetaData(bind=engine)
 MetaData.reflect(metadata_obj)
-prices = metadata_obj.tables["track_prices"]
+prices = metadata_obj.tables["track-prices"]
 amazonRegex = "^https://www.amazon.in"
 flipKartRegex = "^https://www.flipkart.com"
 HEADERS = ({'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/44.0.2403.157 Safari/537.36',
