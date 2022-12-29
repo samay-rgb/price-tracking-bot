@@ -197,7 +197,7 @@ def onMsgReceived(update: Update, context: CallbackContext):
     else:
         context.bot.send_message(
             update.message.chat_id,
-            "I'm sorry 😓.As of now I can only track prices on Amazon. Please send a valid Amazon product link.Support for other sites coming soon.",
+            "I'm sorry.As of now I can only track prices on Amazon. Please send a valid Amazon product link.Support for other sites coming soon.",
             # To preserve the markdown, we attach entities (bold, italic...)
             entities=update.message.entities
         )
