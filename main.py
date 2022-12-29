@@ -50,8 +50,8 @@ def insertInDb(user_name, chat_id, product_name, product_link, product_price, lo
 
 def deleteFromDb(chat_id, message_id):
     with Session(engine) as session:
-        delete_stmt = delete(prices).where(
-            prices.c.chat_id == chat_id and prices.c.message_id == message_id)
+        delete_stmt = delete(prices).where(prices.c.chat_id == chat_id).where(
+            prices.c.message_id == message_id)
         session.execute(delete_stmt)
 
         session.commit()
@@ -59,8 +59,8 @@ def deleteFromDb(chat_id, message_id):
 
 def updateInDb(chat_id, product_link, product_price, lowest_price):
     with Session(engine) as session:
-        update_stmt = prices.update().where(prices.c.chat_id == chat_id and prices.c.product_link ==
-                                            product_link).values(product_price=product_price, lowest_price=lowest_price)
+        update_stmt = prices.update().where(prices.c.chat_id == chat_id).where(prices.c.product_link ==
+                                                                               product_link).values(product_price=product_price, lowest_price=lowest_price)
         session.execute(update_stmt)
         print("🤔")
 
