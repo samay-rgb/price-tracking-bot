@@ -10,6 +10,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pytz import utc
 import os
 import logging
+import traceback
+import html
+import json
+from telegram import ParseMode
+
 bot_token = os.environ['API_KEY']
 engine = create_engine(
     "postgresql://postgres:ahRbK9ywMU88xuidBLlh@containers-us-west-42.railway.app:5809/railway")
@@ -26,10 +31,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEVELOPER_CHAT_ID = 846380174
+
+
+def error_handler(update: Update, context):
+    """Log the error and send a telegram message to notify the developer."""
+    # Log the error before we do anything else, so we can see it even if something breaks.
+    logger.error(msg="Exception while handling an update:",
+                 exc_info=context.error)
+
+    # traceback.format_exception returns the usual python message about an exception, but as a
+    # list of strings rather than a single string, so we have to join them together.
+    tb_list = traceback.format_exception(
+        None, context.error, context.error.__traceback__)
+    tb_string = "".join(tb_list)
+
+    # Build the message with some markup and additional information about what happened.
+    # You might need to add some logic to deal with messages longer than the 4096 character limit.
+    update_str = update.to_dict() if isinstance(update, Update) else str(update)
+    message = (
+        f"An exception was raised while handling an update\n"
+        f"<pre>update = {html.escape(json.dumps(update_str, indent=2, ensure_ascii=False))}"
+        "</pre>\n\n"
+        f"<pre>context.chat_data = {html.escape(str(context.chat_data))}</pre>\n\n"
+        f"<pre>context.user_data = {html.escape(str(context.user_data))}</pre>\n\n"
+        f"<pre>{html.escape(tb_string)}</pre>"
+    )
+
+    # Finally, send the message
+    context.bot.send_message(
+        chat_id=DEVELOPER_CHAT_ID, text=message, parse_mode=ParseMode.HTML
+    )
+
+
 def check_in_db(chat_id, product_link):
     with Session(engine) as session:
         q = session.query(prices).filter(prices.c.chat_id == chat_id).filter(
             prices.c.product_link == product_link)
+        return session.query(q.exists()).scalar()
+
+
+def check_valid_data(chat_id, message_id):
+    with Session(engine) as session:
+        q = session.query(prices).filter(prices.c.chat_id == chat_id).filter(
+            prices.c.message_id == message_id)
         return session.query(q.exists()).scalar()
 
 
@@ -80,24 +125,15 @@ def check_price_drop():
         if current_price < item.lowest_price:
             print("😚")
             lowest_price = current_price
-            keyboard = [[InlineKeyboardButton("Product Page", url=item.product_link), InlineKeyboardButton(
-                "Stop alerts for ☝️", callback_data=item.message_id)]]
+            keyboard = [[InlineKeyboardButton(
+                "Product Page", url=item.product_link)]]
             reply_markup = InlineKeyboardMarkup(keyboard)
             bot.send_message(
-                item.chat_id, f'Price for {title} has dropped to ₹ {current_price}.', reply_markup=reply_markup)
+                item.chat_id, f'Price for {title} has dropped to ₹ {current_price}.\nClick /stop_{item.message_id} to stop alerts for this product', reply_markup=reply_markup)
             updateInDb(item.chat_id, item.product_link,
                        current_price, lowest_price)
         else:
             print("😔")
-
-
-def button(update: Update, context):
-    """
-        Parses the CallbackQuery and updates the message text.
-    """
-    query = update.callback_query
-    query.answer()
-    print(query.data)
 
 
 def alert():
@@ -141,6 +177,23 @@ def get_price(link):
 def onMsgReceived(update: Update, context: CallbackContext):
     if update.message.text:
         msg = update.message.text
+        # check if message starts with stop
+        if msg.startswith("/stop_"):
+            msg_id = msg.split("_")[1]
+            if check_valid_data(update.message.chat_id, int(msg_id)):
+                deleteFromDb(update.message.chat_id, int(msg_id))
+                reply = "👍 You will no longer receive alerts for this product."
+                context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=reply,
+                )
+            else:
+                reply = "🤔 It seems that you don't have any valid product for this command."
+                context.bot.send_message(
+                    chat_id=update.message.chat_id,
+                    text=reply,
+                )
+            return
         user_name = update.message.from_user.username or update.message.from_user.first_name
         chat_id = update.message.chat_id
         message_id = update.message.message_id
@@ -218,36 +271,13 @@ def help(update: Update, context: CallbackContext):
         "Hi! I can help you track the price of any product on Amazon. Just send me the Amazon link of the product you want to track and I will do the rest. I will send you a message when the price drops. Support for flipkart and other sites coming soon. Following are some commands which you can use:\n\n/start - Start the bot\n/help - Get help",
     )
 
-
-def stop_alert(update: Update, context: CallbackContext):
-    query = update.callback_query
-    query.answer()
-    print(query.data)
-    args = query.data
-    if args:
-        chat_id = update.callback_query.message.chat_id
-        product_link = args
-        deleteFromDb(chat_id, product_link)
-        context.bot.send_message(
-            chat_id,
-            "Alerts stopped for this product",
-        )
-    else:
-        context.bot.send_message(
-            update.message.chat_id,
-            "Please provide the product link",
-            # To preserve the markdown, we attach entities (bold, italic...)
-            entities=update.message.entities
-        )
-
-
 def main():
     updater = Updater(token=bot_token, arbitrary_callback_data=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('help', help))
     dp.add_handler(MessageHandler(None, onMsgReceived))
-    dp.add_handler(CallbackQueryHandler(stop_alert))
+    dp.add_error_handler(error_handler)
     updater.start_polling()
     scheduler = BackgroundScheduler(timezone=utc)
     scheduler.add_job(alert, 'interval', hours=3)
