@@ -272,7 +272,7 @@ def help(update: Update, context: CallbackContext):
     )
 
 def main():
-    updater = Updater(token=bot_token, arbitrary_callback_data=True)
+    updater = Updater(bot=bot)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler('start', start))
     dp.add_handler(CommandHandler('help', help))
