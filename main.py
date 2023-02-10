@@ -17,7 +17,7 @@ from telegram import ParseMode
 
 bot_token = os.environ['API_KEY']
 engine = create_engine(
-    "postgresql://postgres:ahRbK9ywMU88xuidBLlh@containers-us-west-42.railway.app:5809/railway")
+    "postgresql://postgres:FZhUGGddoZb4R1NydutM@containers-us-west-42.railway.app:5809/railway")
 metadata_obj = MetaData(bind=engine)
 MetaData.reflect(metadata_obj)
 prices = metadata_obj.tables["track-prices"]
